@@ -25,7 +25,6 @@ public slots:
 
 private:
     void setupUI();
-    void syncScrollBars();
     void displayTextDiff(const QString &text1, const QString &text2);
     void displayPdfDiff(const QString &file1, const QString &file2);
     void displayDocxDiff(const QString &file1, const QString &file2);

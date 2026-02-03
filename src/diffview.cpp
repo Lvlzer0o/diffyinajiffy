@@ -235,8 +235,3 @@ void DiffView::setIgnorePunctuation(bool ignore)
         loadFiles(currentFile1, currentFile2);
     }
 }
-
-void DiffView::syncScrollBars()
-{
-    // Already handled by signal connections
-}

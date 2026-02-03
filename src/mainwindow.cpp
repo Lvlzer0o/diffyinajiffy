@@ -185,7 +185,10 @@ void MainWindow::aboutDialog()
            "<li>Side-by-side comparison</li>"
            "<li>Folder comparison</li>"
            "<li>Ignore whitespace/reflow/punctuation</li>"
+           "</ul>"
+           "<p>Planned enhancements:</p>"
+           "<ul>"
            "<li>PDF overlay mode</li>"
-           "<li>Rich document structure parsing</li>"
+           "<li>Full DOCX structure parsing</li>"
            "</ul>"));
 }

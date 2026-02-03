@@ -1,0 +1,12 @@
+This is a sample text file.
+It contains multiple lines.
+Some lines will be changed.
+Some lines will be deleted.
+Some lines will remain the same.
+
+This is paragraph one with some content.
+
+This is paragraph two with different content.
+It has multiple sentences.
+
+End of file.

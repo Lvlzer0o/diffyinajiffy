@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DiffyInAJiffy
+GenericName=Diff Viewer
+Comment=GitHub-style side-by-side diff viewer for various file formats
+Exec=diffyinajiffy %F
+Icon=diffyinajiffy
+Terminal=false
+Categories=Development;Utility;Qt;
+MimeType=text/plain;text/markdown;application/pdf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;
+Keywords=diff;compare;merge;git;

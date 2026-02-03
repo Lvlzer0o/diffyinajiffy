@@ -55,3 +55,4 @@ endif()
 
 # Install
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+install(FILES diffyinajiffy.desktop DESTINATION share/applications)

@@ -1,0 +1,13 @@
+This is a sample text file.
+It contains multiple lines.
+Some lines have been modified.
+Some lines will remain the same.
+
+This is paragraph one with some content.
+This is a new line added here.
+
+This is paragraph two with updated content.
+It has multiple sentences.
+And even more sentences now.
+
+End of file.

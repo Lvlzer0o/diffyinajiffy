@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QFileInfo>
+#include <QtMath>
 
 DiffView::DiffView(QWidget *parent)
     : QWidget(parent)
@@ -60,15 +61,53 @@ void DiffView::setupUI()
     mainLayout->addWidget(splitter);
     
     // Synchronize scroll bars
-    connect(leftPane->verticalScrollBar(), &QScrollBar::valueChanged,
-            rightPane->verticalScrollBar(), &QScrollBar::setValue);
-    connect(rightPane->verticalScrollBar(), &QScrollBar::valueChanged,
-            leftPane->verticalScrollBar(), &QScrollBar::setValue);
-    
-    connect(leftPane->horizontalScrollBar(), &QScrollBar::valueChanged,
-            rightPane->horizontalScrollBar(), &QScrollBar::setValue);
-    connect(rightPane->horizontalScrollBar(), &QScrollBar::valueChanged,
-            leftPane->horizontalScrollBar(), &QScrollBar::setValue);
+    connect(leftPane->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (syncingVertical) {
+            return;
+        }
+        syncingVertical = true;
+        syncScrollBars(leftPane->verticalScrollBar(), rightPane->verticalScrollBar(), value);
+        syncingVertical = false;
+    });
+    connect(rightPane->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (syncingVertical) {
+            return;
+        }
+        syncingVertical = true;
+        syncScrollBars(rightPane->verticalScrollBar(), leftPane->verticalScrollBar(), value);
+        syncingVertical = false;
+    });
+
+    connect(leftPane->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (syncingHorizontal) {
+            return;
+        }
+        syncingHorizontal = true;
+        syncScrollBars(leftPane->horizontalScrollBar(), rightPane->horizontalScrollBar(), value);
+        syncingHorizontal = false;
+    });
+    connect(rightPane->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (syncingHorizontal) {
+            return;
+        }
+        syncingHorizontal = true;
+        syncScrollBars(rightPane->horizontalScrollBar(), leftPane->horizontalScrollBar(), value);
+        syncingHorizontal = false;
+    });
+}
+
+void DiffView::syncScrollBars(QScrollBar *source, QScrollBar *target, int value)
+{
+    const int sourceMax = source->maximum();
+    const int targetMax = target->maximum();
+    if (sourceMax <= 0 || targetMax <= 0) {
+        target->setValue(value);
+        return;
+    }
+
+    const double ratio = static_cast<double>(value) / static_cast<double>(sourceMax);
+    const int targetValue = qRound(ratio * static_cast<double>(targetMax));
+    target->setValue(targetValue);
 }
 
 void DiffView::loadFiles(const QString &file1, const QString &file2)

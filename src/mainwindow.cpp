@@ -3,6 +3,10 @@
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QFileInfo>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -14,6 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
     
     setWindowTitle("DiffyInAJiffy - Side-by-Side Diff Viewer");
     resize(1200, 800);
+    setAcceptDrops(true);
 }
 
 MainWindow::~MainWindow()
@@ -46,6 +51,73 @@ void MainWindow::setupUI()
     setCentralWidget(mainSplitter);
     
     statusBar()->showMessage("Ready");
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (!event->mimeData()->hasUrls()) {
+        return;
+    }
+
+    int localCount = 0;
+    const auto urls = event->mimeData()->urls();
+    for (const auto &url : urls) {
+        if (url.isLocalFile()) {
+            ++localCount;
+        }
+    }
+
+    if (localCount >= 2) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls()) {
+        return;
+    }
+
+    QStringList paths;
+    const auto urls = event->mimeData()->urls();
+    for (const auto &url : urls) {
+        if (url.isLocalFile()) {
+            paths.append(url.toLocalFile());
+        }
+    }
+
+    if (paths.size() < 2) {
+        QMessageBox::warning(this, tr("Drag and Drop"),
+            tr("Please drop exactly two files or two folders."));
+        return;
+    }
+
+    if (paths.size() > 2) {
+        QMessageBox::information(this, tr("Drag and Drop"),
+            tr("More than two items were dropped. Using the first two."));
+    }
+
+    const QString path1 = paths[0];
+    const QString path2 = paths[1];
+    QFileInfo info1(path1);
+    QFileInfo info2(path2);
+
+    if (info1.isDir() && info2.isDir()) {
+        folderView->loadFolders(path1, path2);
+        statusBar()->showMessage(tr("Comparing folders: %1 and %2").arg(path1).arg(path2));
+        event->acceptProposedAction();
+        return;
+    }
+
+    if (info1.isFile() && info2.isFile()) {
+        diffView->loadFiles(path1, path2);
+        statusBar()->showMessage(tr("Comparing: %1 and %2").arg(path1).arg(path2));
+        event->acceptProposedAction();
+        return;
+    }
+
+    QMessageBox::warning(this, tr("Drag and Drop"),
+        tr("Please drop two files or two folders (not a mix)."));
 }
 
 void MainWindow::createActions()

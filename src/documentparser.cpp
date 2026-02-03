@@ -3,9 +3,36 @@
 #include <QTextStream>
 #include <QXmlStreamReader>
 #include <QDebug>
+#include <memory>
 
 #ifdef HAVE_POPPLER
 #include <poppler/qt6/poppler-qt6.h>
+
+namespace {
+template <typename T>
+T *rawPtr(T *ptr)
+{
+    return ptr;
+}
+
+template <typename T>
+T *rawPtr(const std::unique_ptr<T> &ptr)
+{
+    return ptr.get();
+}
+
+template <typename T>
+std::unique_ptr<T> makeGuard(T *ptr)
+{
+    return std::unique_ptr<T>(ptr);
+}
+
+template <typename T>
+std::unique_ptr<T> makeGuard(const std::unique_ptr<T> &)
+{
+    return {};
+}
+} // namespace
 #endif
 
 DocumentParser::DocumentParser(QObject *parent)
@@ -21,27 +48,30 @@ QString DocumentParser::parsePdf(const QString &filePath)
 {
 #ifdef HAVE_POPPLER
     // Use Poppler to extract text from PDF
-    Poppler::Document *document = Poppler::Document::load(filePath);
-    
-    if (!document || document->isLocked()) {
+    auto document = Poppler::Document::load(filePath);
+    auto documentGuard = makeGuard(document);
+    auto *documentPtr = rawPtr(document);
+
+    if (!documentPtr || documentPtr->isLocked()) {
         qWarning() << "Failed to load PDF:" << filePath;
         return QString();
     }
     
     QString text;
-    int numPages = document->numPages();
+    int numPages = documentPtr->numPages();
     
     for (int i = 0; i < numPages; ++i) {
-        Poppler::Page *page = document->page(i);
-        if (page) {
+        auto page = documentPtr->page(i);
+        auto pageGuard = makeGuard(page);
+        auto *pagePtr = rawPtr(page);
+
+        if (pagePtr) {
             text += QString("--- Page %1 ---\n").arg(i + 1);
-            text += page->text(QRectF());
+            text += pagePtr->text(QRectF());
             text += "\n\n";
-            delete page;
         }
     }
     
-    delete document;
     return text;
 #else
     qWarning() << "PDF support not available (Poppler not found)";

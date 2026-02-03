@@ -29,6 +29,7 @@ private:
     void displayPdfDiff(const QString &file1, const QString &file2);
     void displayDocxDiff(const QString &file1, const QString &file2);
     void highlightDifferences(const QVector<DiffHunk> &hunks);
+    void syncScrollBars(QScrollBar *source, QScrollBar *target, int value);
     
     QTextEdit *leftPane;
     QTextEdit *rightPane;
@@ -40,6 +41,8 @@ private:
     bool ignoreWhitespace;
     bool ignoreReflow;
     bool ignorePunctuation;
+    bool syncingVertical = false;
+    bool syncingHorizontal = false;
     
     QString currentFile1;
     QString currentFile2;

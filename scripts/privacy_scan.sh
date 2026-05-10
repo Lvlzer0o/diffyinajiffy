@@ -13,12 +13,14 @@ if [ "${1:-}" = "--tracked" ]; then
 fi
 
 PATTERN='([A-Za-z]:\\Users\\|/Users/|/home/|AppData|workspaceStorage|\.ssh|id_rsa|BEGIN[[:space:]]+[A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|password[[:space:]]*[=:]|secret[[:space:]]*[=:]|token[[:space:]]*[=:]|api[_-]?key[[:space:]]*[=:])'
+SCAN_PATHS="."
+SCAN_EXCLUDE=":(exclude)scripts/privacy_scan.sh"
 
 echo "[privacy-scan] Running ${MODE} scan..."
 
 if [ "$MODE" = "--staged" ]; then
   # Only inspect newly added staged lines to keep pre-commit fast and focused.
-  STAGED_ADDITIONS="$(git diff --cached --unified=0 --no-color --text | grep -E '^\+[^+]' || true)"
+  STAGED_ADDITIONS="$(git diff --cached --unified=0 --no-color --text -- "$SCAN_PATHS" "$SCAN_EXCLUDE" | grep -E '^\+[^+]' || true)"
 
   if [ -z "$STAGED_ADDITIONS" ]; then
     echo "[privacy-scan] No staged additions to scan."
@@ -36,15 +38,14 @@ if [ "$MODE" = "--staged" ]; then
   exit 0
 fi
 
-TRACKED_FILES="$(git ls-files)"
-if [ -z "$TRACKED_FILES" ]; then
+if [ -z "$(git ls-files -- "$SCAN_PATHS" "$SCAN_EXCLUDE")" ]; then
   echo "[privacy-scan] No tracked files to scan."
   exit 0
 fi
 
-if git grep -n -I -E "$PATTERN" -- $TRACKED_FILES >/dev/null 2>&1; then
+if git grep -n -I -E "$PATTERN" -- "$SCAN_PATHS" "$SCAN_EXCLUDE" >/dev/null 2>&1; then
   echo "[privacy-scan] Potential sensitive content found in tracked files:"
-  git grep -n -I -E "$PATTERN" -- $TRACKED_FILES || true
+  git grep -n -I -E "$PATTERN" -- "$SCAN_PATHS" "$SCAN_EXCLUDE" || true
   echo "[privacy-scan] Push blocked. Remove/redact matched content before pushing."
   exit 1
 fi

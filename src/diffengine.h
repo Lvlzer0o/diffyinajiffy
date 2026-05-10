@@ -22,6 +22,17 @@ struct DiffHunk {
     DiffHunk() : type(Unchanged), leftStart(0), leftEnd(0), rightStart(0), rightEnd(0) {}
 };
 
+struct DiffLinePair {
+    DiffHunk::Type type;
+    QString leftLine;
+    QString rightLine;
+
+    DiffLinePair()
+        : type(DiffHunk::Unchanged)
+    {
+    }
+};
+
 class DiffEngine : public QObject
 {
     Q_OBJECT
@@ -32,6 +43,7 @@ public:
 
     // Compute differences between two texts
     QVector<DiffHunk> computeDiff(const QString &text1, const QString &text2);
+    QVector<DiffLinePair> computeAlignedLines(const QString &text1, const QString &text2);
     
     // Text normalization utilities
     QString normalizeWhitespace(const QString &text);

@@ -43,6 +43,8 @@ private:
     QAction *ignoreWhitespaceAction;
     QAction *ignoreReflowAction;
     QAction *ignorePunctuationAction;
+    QAction *nextChangeAction;
+    QAction *previousChangeAction;
     QAction *aboutAction;
 };
 

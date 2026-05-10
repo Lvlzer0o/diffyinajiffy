@@ -22,13 +22,15 @@ public:
 
 public slots:
     void loadFiles(const QString &file1, const QString &file2);
+    void goToNextChange();
+    void goToPreviousChange();
 
 private:
     void setupUI();
     void displayTextDiff(const QString &text1, const QString &text2);
     void displayPdfDiff(const QString &file1, const QString &file2);
     void displayDocxDiff(const QString &file1, const QString &file2);
-    void highlightDifferences(const QVector<DiffHunk> &hunks);
+    void highlightDifferences(const QVector<DiffLinePair> &lines);
     
     QTextEdit *leftPane;
     QTextEdit *rightPane;
@@ -43,6 +45,9 @@ private:
     
     QString currentFile1;
     QString currentFile2;
+
+    QVector<int> changeLineIndices;
+    int currentChangeIndex;
 };
 
 #endif // DIFFVIEW_H

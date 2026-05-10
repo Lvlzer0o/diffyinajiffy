@@ -82,6 +82,18 @@ void MainWindow::createActions()
     ignorePunctuationAction->setStatusTip(tr("Ignore punctuation-only changes"));
     connect(ignorePunctuationAction, &QAction::toggled, 
             this, &MainWindow::toggleIgnorePunctuation);
+
+        nextChangeAction = new QAction(tr("&Next Change"), this);
+        nextChangeAction->setShortcut(tr("F7"));
+        nextChangeAction->setStatusTip(tr("Jump to next difference"));
+        connect(nextChangeAction, &QAction::triggered,
+            diffView, &DiffView::goToNextChange);
+
+        previousChangeAction = new QAction(tr("&Previous Change"), this);
+        previousChangeAction->setShortcut(tr("Shift+F7"));
+        previousChangeAction->setStatusTip(tr("Jump to previous difference"));
+        connect(previousChangeAction, &QAction::triggered,
+            diffView, &DiffView::goToPreviousChange);
     
     aboutAction = new QAction(tr("&About"), this);
     aboutAction->setStatusTip(tr("About DiffyInAJiffy"));
@@ -100,6 +112,9 @@ void MainWindow::createMenus()
     viewMenu->addAction(ignoreWhitespaceAction);
     viewMenu->addAction(ignoreReflowAction);
     viewMenu->addAction(ignorePunctuationAction);
+    viewMenu->addSeparator();
+    viewMenu->addAction(previousChangeAction);
+    viewMenu->addAction(nextChangeAction);
     
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(aboutAction);
@@ -114,6 +129,9 @@ void MainWindow::createToolBar()
     toolBar->addAction(ignoreWhitespaceAction);
     toolBar->addAction(ignoreReflowAction);
     toolBar->addAction(ignorePunctuationAction);
+    toolBar->addSeparator();
+    toolBar->addAction(previousChangeAction);
+    toolBar->addAction(nextChangeAction);
 }
 
 void MainWindow::openFiles()

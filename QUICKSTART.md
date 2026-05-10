@@ -18,10 +18,12 @@
 
 2. Build and install:
    ```bash
-   ./build.sh
-   cd build
-   sudo make install
+   cmake -S . -B build
+   cmake --build build
+   cmake --install build
    ```
+
+   On POSIX shells, `./build.sh` runs the same configure and build commands.
 
 ## Basic Usage
 

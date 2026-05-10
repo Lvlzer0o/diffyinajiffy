@@ -63,64 +63,130 @@ QVector<DiffHunk> DiffEngine::computeDiff(const QString &text1, const QString &t
     return editsToHunks(edits, text1, text2);
 }
 
-QVector<DiffEngine::Edit> DiffEngine::myersDiff(const QStringList &lines1, const QStringList &lines2)
+QVector<DiffLinePair> DiffEngine::computeAlignedLines(const QString &text1, const QString &text2)
 {
-    // Simplified Myers diff algorithm
-    // This is a basic implementation for demonstration
-    QVector<Edit> edits;
-    
-    int i = 0, j = 0;
-    while (i < lines1.size() || j < lines2.size()) {
-        if (i < lines1.size() && j < lines2.size() && lines1[i] == lines2[j]) {
-            // Equal lines
-            Edit e;
-            e.type = Edit::Equal;
-            e.pos1 = i;
-            e.pos2 = j;
-            e.length = 1;
-            edits.append(e);
-            i++;
-            j++;
-        } else if (i < lines1.size() && (j >= lines2.size() || 
-                   (j + 1 < lines2.size() && lines1[i] == lines2[j + 1]))) {
-            // Insert in text2
-            Edit e;
-            e.type = Edit::Insert;
-            e.pos1 = i;
-            e.pos2 = j;
-            e.length = 1;
-            edits.append(e);
-            j++;
-        } else if (j < lines2.size() && (i >= lines1.size() || 
-                   (i + 1 < lines1.size() && lines1[i + 1] == lines2[j]))) {
-            // Delete from text1
-            Edit e;
-            e.type = Edit::Delete;
-            e.pos1 = i;
-            e.pos2 = j;
-            e.length = 1;
-            edits.append(e);
-            i++;
-        } else if (i < lines1.size() && j < lines2.size()) {
-            // Modified line
-            Edit del, ins;
-            del.type = Edit::Delete;
-            del.pos1 = i;
-            del.pos2 = j;
-            del.length = 1;
-            
-            ins.type = Edit::Insert;
-            ins.pos1 = i;
-            ins.pos2 = j;
-            ins.length = 1;
-            
-            edits.append(del);
-            edits.append(ins);
-            i++;
-            j++;
+    const QStringList lines1 = text1.split('\n');
+    const QStringList lines2 = text2.split('\n');
+    const QVector<Edit> edits = myersDiff(lines1, lines2);
+
+    QVector<DiffLinePair> aligned;
+
+    int i = 0;
+    while (i < edits.size()) {
+        if (edits[i].type == Edit::Equal) {
+            DiffLinePair pair;
+            pair.type = DiffHunk::Unchanged;
+            pair.leftLine = edits[i].pos1 < lines1.size() ? lines1[edits[i].pos1] : QString();
+            pair.rightLine = edits[i].pos2 < lines2.size() ? lines2[edits[i].pos2] : QString();
+            aligned.append(pair);
+            ++i;
+            continue;
+        }
+
+        QVector<QString> deletedLines;
+        QVector<QString> insertedLines;
+
+        while (i < edits.size() && edits[i].type != Edit::Equal) {
+            if (edits[i].type == Edit::Delete) {
+                deletedLines.append(edits[i].pos1 < lines1.size() ? lines1[edits[i].pos1] : QString());
+            } else if (edits[i].type == Edit::Insert) {
+                insertedLines.append(edits[i].pos2 < lines2.size() ? lines2[edits[i].pos2] : QString());
+            }
+            ++i;
+        }
+
+        const int pairedCount = std::min(deletedLines.size(), insertedLines.size());
+        for (int p = 0; p < pairedCount; ++p) {
+            DiffLinePair pair;
+            pair.type = DiffHunk::Modified;
+            pair.leftLine = deletedLines[p];
+            pair.rightLine = insertedLines[p];
+            aligned.append(pair);
+        }
+
+        for (int p = pairedCount; p < deletedLines.size(); ++p) {
+            DiffLinePair pair;
+            pair.type = DiffHunk::Deleted;
+            pair.leftLine = deletedLines[p];
+            pair.rightLine.clear();
+            aligned.append(pair);
+        }
+
+        for (int p = pairedCount; p < insertedLines.size(); ++p) {
+            DiffLinePair pair;
+            pair.type = DiffHunk::Added;
+            pair.leftLine.clear();
+            pair.rightLine = insertedLines[p];
+            aligned.append(pair);
         }
     }
-    
+
+    return aligned;
+}
+
+QVector<DiffEngine::Edit> DiffEngine::myersDiff(const QStringList &lines1, const QStringList &lines2)
+{
+    // Use LCS-based reconstruction to produce a stable line diff.
+    QVector<Edit> edits;
+
+    const int n = lines1.size();
+    const int m = lines2.size();
+    QVector<QVector<int>> lcs(n + 1, QVector<int>(m + 1, 0));
+
+    for (int i = n - 1; i >= 0; --i) {
+        for (int j = m - 1; j >= 0; --j) {
+            if (lines1[i] == lines2[j]) {
+                lcs[i][j] = 1 + lcs[i + 1][j + 1];
+            } else {
+                lcs[i][j] = std::max(lcs[i + 1][j], lcs[i][j + 1]);
+            }
+        }
+    }
+
+    int i = 0;
+    int j = 0;
+    while (i < n && j < m) {
+        Edit e;
+        e.length = 1;
+        e.pos1 = i;
+        e.pos2 = j;
+
+        if (lines1[i] == lines2[j]) {
+            e.type = Edit::Equal;
+            edits.append(e);
+            ++i;
+            ++j;
+        } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+            e.type = Edit::Delete;
+            edits.append(e);
+            ++i;
+        } else {
+            e.type = Edit::Insert;
+            edits.append(e);
+            ++j;
+        }
+    }
+
+    while (i < n) {
+        Edit e;
+        e.type = Edit::Delete;
+        e.pos1 = i;
+        e.pos2 = j;
+        e.length = 1;
+        edits.append(e);
+        ++i;
+    }
+
+    while (j < m) {
+        Edit e;
+        e.type = Edit::Insert;
+        e.pos1 = i;
+        e.pos2 = j;
+        e.length = 1;
+        edits.append(e);
+        ++j;
+    }
+
     return edits;
 }
 

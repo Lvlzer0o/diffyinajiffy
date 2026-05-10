@@ -5,12 +5,25 @@
 #include <QFile>
 #include <QTextStream>
 #include <QFileInfo>
+#include <QTextBlock>
+
+namespace {
+int lineToPosition(const QTextDocument *doc, int lineNumber)
+{
+    QTextBlock block = doc->findBlockByNumber(lineNumber);
+    if (!block.isValid()) {
+        return 0;
+    }
+    return block.position();
+}
+}
 
 DiffView::DiffView(QWidget *parent)
     : QWidget(parent)
     , ignoreWhitespace(false)
     , ignoreReflow(false)
     , ignorePunctuation(false)
+    , currentChangeIndex(-1)
 {
     diffEngine = new DiffEngine(this);
     docParser = new DocumentParser(this);
@@ -129,28 +142,46 @@ void DiffView::loadFiles(const QString &file1, const QString &file2)
 void DiffView::displayTextDiff(const QString &text1, const QString &text2)
 {
     // Apply preprocessing based on options
-    QString processedText1 = text1;
-    QString processedText2 = text2;
+    QString displayText1 = text1;
+    QString displayText2 = text2;
     
     if (ignoreWhitespace) {
-        processedText1 = diffEngine->normalizeWhitespace(processedText1);
-        processedText2 = diffEngine->normalizeWhitespace(processedText2);
+        displayText1 = diffEngine->normalizeWhitespace(displayText1);
+        displayText2 = diffEngine->normalizeWhitespace(displayText2);
+    }
+
+    if (ignoreReflow) {
+        displayText1 = diffEngine->normalizeReflow(displayText1);
+        displayText2 = diffEngine->normalizeReflow(displayText2);
     }
     
     if (ignorePunctuation) {
-        processedText1 = diffEngine->removePunctuation(processedText1);
-        processedText2 = diffEngine->removePunctuation(processedText2);
+        displayText1 = diffEngine->removePunctuation(displayText1);
+        displayText2 = diffEngine->removePunctuation(displayText2);
     }
     
-    // Compute diff
-    QVector<DiffHunk> hunks = diffEngine->computeDiff(processedText1, processedText2);
-    
-    // Display in panes
-    leftPane->setPlainText(text1);
-    rightPane->setPlainText(text2);
-    
-    // Highlight differences
-    highlightDifferences(hunks);
+    // Compute and display aligned line pairs so inserted/deleted blocks stay aligned.
+    const QVector<DiffLinePair> alignedLines = diffEngine->computeAlignedLines(displayText1, displayText2);
+
+    QStringList leftLines;
+    QStringList rightLines;
+    leftLines.reserve(alignedLines.size());
+    rightLines.reserve(alignedLines.size());
+
+    changeLineIndices.clear();
+    for (int i = 0; i < alignedLines.size(); ++i) {
+        leftLines.append(alignedLines[i].leftLine);
+        rightLines.append(alignedLines[i].rightLine);
+        if (alignedLines[i].type != DiffHunk::Unchanged) {
+            changeLineIndices.append(i);
+        }
+    }
+    currentChangeIndex = changeLineIndices.isEmpty() ? -1 : 0;
+
+    leftPane->setPlainText(leftLines.join("\n"));
+    rightPane->setPlainText(rightLines.join("\n"));
+
+    highlightDifferences(alignedLines);
 }
 
 void DiffView::displayPdfDiff(const QString &file1, const QString &file2)
@@ -177,11 +208,8 @@ void DiffView::displayDocxDiff(const QString &file1, const QString &file2)
     displayTextDiff(text1, text2);
 }
 
-void DiffView::highlightDifferences(const QVector<DiffHunk> &hunks)
+void DiffView::highlightDifferences(const QVector<DiffLinePair> &lines)
 {
-    QTextCursor leftCursor(leftPane->document());
-    QTextCursor rightCursor(rightPane->document());
-    
     QTextCharFormat addedFormat;
     addedFormat.setBackground(QColor(200, 255, 200)); // Light green
     
@@ -190,24 +218,36 @@ void DiffView::highlightDifferences(const QVector<DiffHunk> &hunks)
     
     QTextCharFormat modifiedFormat;
     modifiedFormat.setBackground(QColor(255, 255, 200)); // Light yellow
-    
-    for (const DiffHunk &hunk : hunks) {
-        if (hunk.type == DiffHunk::Added) {
-            rightCursor.setPosition(hunk.rightStart);
-            rightCursor.setPosition(hunk.rightEnd, QTextCursor::KeepAnchor);
-            rightCursor.setCharFormat(addedFormat);
-        } else if (hunk.type == DiffHunk::Deleted) {
-            leftCursor.setPosition(hunk.leftStart);
-            leftCursor.setPosition(hunk.leftEnd, QTextCursor::KeepAnchor);
-            leftCursor.setCharFormat(deletedFormat);
-        } else if (hunk.type == DiffHunk::Modified) {
-            leftCursor.setPosition(hunk.leftStart);
-            leftCursor.setPosition(hunk.leftEnd, QTextCursor::KeepAnchor);
-            leftCursor.setCharFormat(modifiedFormat);
-            
-            rightCursor.setPosition(hunk.rightStart);
-            rightCursor.setPosition(hunk.rightEnd, QTextCursor::KeepAnchor);
-            rightCursor.setCharFormat(modifiedFormat);
+
+    for (int lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
+        if (lines[lineIndex].type == DiffHunk::Added) {
+            QTextBlock rightBlock = rightPane->document()->findBlockByNumber(lineIndex);
+            if (rightBlock.isValid()) {
+                QTextCursor rightCursor(rightBlock);
+                rightCursor.select(QTextCursor::BlockUnderCursor);
+                rightCursor.setCharFormat(addedFormat);
+            }
+        } else if (lines[lineIndex].type == DiffHunk::Deleted) {
+            QTextBlock leftBlock = leftPane->document()->findBlockByNumber(lineIndex);
+            if (leftBlock.isValid()) {
+                QTextCursor leftCursor(leftBlock);
+                leftCursor.select(QTextCursor::BlockUnderCursor);
+                leftCursor.setCharFormat(deletedFormat);
+            }
+        } else if (lines[lineIndex].type == DiffHunk::Modified) {
+            QTextBlock leftBlock = leftPane->document()->findBlockByNumber(lineIndex);
+            if (leftBlock.isValid()) {
+                QTextCursor leftCursor(leftBlock);
+                leftCursor.select(QTextCursor::BlockUnderCursor);
+                leftCursor.setCharFormat(modifiedFormat);
+            }
+
+            QTextBlock rightBlock = rightPane->document()->findBlockByNumber(lineIndex);
+            if (rightBlock.isValid()) {
+                QTextCursor rightCursor(rightBlock);
+                rightCursor.select(QTextCursor::BlockUnderCursor);
+                rightCursor.setCharFormat(modifiedFormat);
+            }
         }
     }
 }
@@ -234,4 +274,44 @@ void DiffView::setIgnorePunctuation(bool ignore)
     if (!currentFile1.isEmpty() && !currentFile2.isEmpty()) {
         loadFiles(currentFile1, currentFile2);
     }
+}
+
+void DiffView::goToNextChange()
+{
+    if (changeLineIndices.isEmpty()) {
+        return;
+    }
+
+    currentChangeIndex = (currentChangeIndex + 1) % changeLineIndices.size();
+    const int lineIndex = changeLineIndices[currentChangeIndex];
+
+    QTextCursor leftCursor(leftPane->textCursor());
+    leftCursor.setPosition(lineToPosition(leftPane->document(), lineIndex));
+    leftPane->setTextCursor(leftCursor);
+    leftPane->ensureCursorVisible();
+
+    QTextCursor rightCursor(rightPane->textCursor());
+    rightCursor.setPosition(lineToPosition(rightPane->document(), lineIndex));
+    rightPane->setTextCursor(rightCursor);
+    rightPane->ensureCursorVisible();
+}
+
+void DiffView::goToPreviousChange()
+{
+    if (changeLineIndices.isEmpty()) {
+        return;
+    }
+
+    currentChangeIndex = (currentChangeIndex - 1 + changeLineIndices.size()) % changeLineIndices.size();
+    const int lineIndex = changeLineIndices[currentChangeIndex];
+
+    QTextCursor leftCursor(leftPane->textCursor());
+    leftCursor.setPosition(lineToPosition(leftPane->document(), lineIndex));
+    leftPane->setTextCursor(leftCursor);
+    leftPane->ensureCursorVisible();
+
+    QTextCursor rightCursor(rightPane->textCursor());
+    rightCursor.setPosition(lineToPosition(rightPane->document(), lineIndex));
+    rightPane->setTextCursor(rightCursor);
+    rightPane->ensureCursorVisible();
 }

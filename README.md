@@ -1,6 +1,6 @@
 # DiffyInAJiffy
 
-A GitHub-style side-by-side diff viewer for Linux with Qt 6, supporting multiple file formats offline.
+A GitHub-style side-by-side diff viewer built with Qt 6, supporting multiple file formats offline.
 
 ## Features
 
@@ -16,15 +16,15 @@ A GitHub-style side-by-side diff viewer for Linux with Qt 6, supporting multiple
   - Ignore reflow
   - Ignore punctuation-only changes
 - **Syntax highlighting** for additions, deletions, and modifications
-- **Linux-native** feel with Qt 6 widgets
+- **Native desktop** feel with Qt 6 widgets
 
 ## Requirements
 
 - Qt 6 (Core, Gui, Widgets)
 - CMake 3.16 or higher
 - C++17 compiler
-- Poppler-Qt6 (for PDF support)
-- pkg-config
+- Poppler-Qt6 (optional, for PDF support)
+- pkg-config (optional, used when detecting Poppler-Qt6)
 
 ### Ubuntu/Debian
 
@@ -47,19 +47,23 @@ sudo pacman -S cmake qt6-base poppler-qt6 gcc pkg-config
 ## Building
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+cmake -S . -B build
+cmake --build build
 ```
+
+The `build.sh` script is a POSIX-shell convenience wrapper around the same CMake commands.
 
 ## Installation
 
 ```bash
-sudo make install
+cmake --install build
 ```
 
-This will install the `diffyinajiffy` binary to `/usr/local/bin`.
+This installs the `diffyinajiffy` binary to the platform's configured CMake install prefix.
+
+## VS Code
+
+The workspace uses the existing CMake project as the source of truth. Install the recommended CMake Tools and C/C++ extensions, then run the default `CMake: build` task or use the CMake Tools commands.
 
 ## Usage
 
@@ -130,3 +134,35 @@ MIT License (or your chosen license)
 ## Contributing
 
 Contributions welcome! Please submit issues and pull requests.
+
+## Privacy Guard (Pre-Commit and Pre-Push)
+
+This repository includes a lightweight scanner that blocks commits/pushes when common sensitive patterns are detected (absolute local paths, private key signatures, token-like strings, and basic secret assignments).
+
+### Enable Hooks
+
+PowerShell:
+
+```powershell
+./scripts/install_hooks.ps1
+```
+
+Or manually:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Manual Scan
+
+Scan staged additions (same as pre-commit):
+
+```bash
+./scripts/privacy_scan.sh --staged
+```
+
+Scan tracked files (same as pre-push):
+
+```bash
+./scripts/privacy_scan.sh --tracked
+```

@@ -65,6 +65,24 @@ This installs the `diffyinajiffy` binary to the platform's configured CMake inst
 
 The workspace uses the existing CMake project as the source of truth. Install the recommended CMake Tools and C/C++ extensions, then run the default `CMake: build` task or use the CMake Tools commands.
 
+## Codex Cloud
+
+Codex Cloud runs this Qt Widgets app in a Linux container, so the environment needs Qt6 development packages and a virtual display for GUI smoke checks.
+
+Use this setup script in the Codex Cloud environment settings:
+
+```bash
+bash ./scripts/codex_cloud_setup.sh
+```
+
+Use this command when asking Codex to verify UI/build changes:
+
+```bash
+bash ./scripts/codex_cloud_check.sh
+```
+
+The check configures and builds `build/codex-cloud` with Ninja, then launches the app under `xvfb-run` long enough to prove the Qt GUI can start in a headless container.
+
 ## Usage
 
 ### File Comparison

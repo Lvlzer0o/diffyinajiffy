@@ -6,6 +6,8 @@
 #include <QByteArray>
 #include <QXmlStreamAttributes>
 #include <algorithm>
+#include <limits>
+#include <optional>
 #include <zlib.h>
 
 #ifdef HAVE_POPPLER
@@ -18,25 +20,50 @@ constexpr quint32 ZipCentralDirectorySignature = 0x02014b50;
 constexpr quint32 ZipEndOfCentralDirectorySignature = 0x06054b50;
 constexpr quint16 ZipStored = 0;
 constexpr quint16 ZipDeflated = 8;
+constexpr qint64 MaxDocxFileSize = 100ll * 1024 * 1024;
+constexpr quint32 MaxDocxEntrySize = 100u * 1024 * 1024;
 
-quint16 readUInt16(const QByteArray &data, qsizetype offset)
+bool hasBytes(const QByteArray &data, qsizetype offset, qsizetype length)
 {
+    return offset >= 0 && length >= 0 && offset <= data.size() - length;
+}
+
+std::optional<quint16> readUInt16(const QByteArray &data, qsizetype offset)
+{
+    if (!hasBytes(data, offset, 2)) {
+        return std::nullopt;
+    }
+
     return static_cast<quint16>(static_cast<unsigned char>(data[offset]))
         | static_cast<quint16>(static_cast<unsigned char>(data[offset + 1]) << 8);
 }
 
-quint32 readUInt32(const QByteArray &data, qsizetype offset)
+std::optional<quint32> readUInt32(const QByteArray &data, qsizetype offset)
 {
-    return static_cast<quint32>(readUInt16(data, offset))
-        | (static_cast<quint32>(readUInt16(data, offset + 2)) << 16);
+    const std::optional<quint16> low = readUInt16(data, offset);
+    const std::optional<quint16> high = readUInt16(data, offset + 2);
+    if (!low || !high) {
+        return std::nullopt;
+    }
+
+    return static_cast<quint32>(*low) | (static_cast<quint32>(*high) << 16);
 }
 
 qsizetype findEndOfCentralDirectory(const QByteArray &data)
 {
+    if (data.size() < 22) {
+        return -1;
+    }
+
     const qsizetype minOffset = std::max<qsizetype>(0, data.size() - 65557);
-    for (qsizetype offset = data.size() - 22; offset >= minOffset; --offset) {
-        if (readUInt32(data, offset) == ZipEndOfCentralDirectorySignature) {
+    for (qsizetype offset = data.size() - 22;; --offset) {
+        const std::optional<quint32> signature = readUInt32(data, offset);
+        if (signature && *signature == ZipEndOfCentralDirectorySignature) {
             return offset;
+        }
+
+        if (offset == minOffset) {
+            break;
         }
     }
 
@@ -45,12 +72,19 @@ qsizetype findEndOfCentralDirectory(const QByteArray &data)
 
 QByteArray inflateRawDeflate(const QByteArray &compressed, quint32 uncompressedSize)
 {
+    if (uncompressedSize > MaxDocxEntrySize
+        || compressed.size() > std::numeric_limits<uInt>::max()
+        || uncompressedSize > std::numeric_limits<uInt>::max()) {
+        return QByteArray();
+    }
+
     QByteArray output;
     output.resize(static_cast<qsizetype>(uncompressedSize));
+    QByteArray input = compressed;
 
     z_stream stream = {};
-    stream.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(compressed.constData()));
-    stream.avail_in = static_cast<uInt>(compressed.size());
+    stream.next_in = reinterpret_cast<Bytef *>(input.data());
+    stream.avail_in = static_cast<uInt>(input.size());
     stream.next_out = reinterpret_cast<Bytef *>(output.data());
     stream.avail_out = static_cast<uInt>(output.size());
 
@@ -67,17 +101,6 @@ QByteArray inflateRawDeflate(const QByteArray &compressed, quint32 uncompressedS
 
     output.resize(static_cast<qsizetype>(stream.total_out));
     return output;
-}
-
-QString attributeValue(const QXmlStreamAttributes &attributes, QStringView localName)
-{
-    for (const QXmlStreamAttribute &attribute : attributes) {
-        if (attribute.name() == localName) {
-            return attribute.value().toString();
-        }
-    }
-
-    return QString();
 }
 }
 
@@ -146,6 +169,11 @@ QString DocumentParser::extractTextFromZip(const QString &filePath, const QStrin
         return QString();
     }
 
+    if (file.size() > MaxDocxFileSize) {
+        qWarning() << "DOCX file is too large to parse safely:" << filePath;
+        return QString();
+    }
+
     const QByteArray zipData = file.readAll();
     if (zipData.size() < 22) {
         qWarning() << "Invalid DOCX ZIP archive:" << filePath;
@@ -158,70 +186,90 @@ QString DocumentParser::extractTextFromZip(const QString &filePath, const QStrin
         return QString();
     }
 
-    const quint16 entryCount = readUInt16(zipData, eocdOffset + 10);
-    const quint32 centralDirectoryOffset = readUInt32(zipData, eocdOffset + 16);
-    qsizetype offset = centralDirectoryOffset;
+    const std::optional<quint16> entryCount = readUInt16(zipData, eocdOffset + 10);
+    const std::optional<quint32> centralDirectoryOffset = readUInt32(zipData, eocdOffset + 16);
+    if (!entryCount || !centralDirectoryOffset || *centralDirectoryOffset > static_cast<quint32>(zipData.size())) {
+        qWarning() << "Invalid DOCX ZIP central directory metadata:" << filePath;
+        return QString();
+    }
 
-    for (quint16 entryIndex = 0; entryIndex < entryCount; ++entryIndex) {
-        if (offset + 46 > zipData.size() || readUInt32(zipData, offset) != ZipCentralDirectorySignature) {
+    const QByteArray expectedEntryName = entryName.toUtf8();
+    qsizetype offset = static_cast<qsizetype>(*centralDirectoryOffset);
+
+    for (quint16 entryIndex = 0; entryIndex < *entryCount; ++entryIndex) {
+        const std::optional<quint32> centralDirectorySignature = readUInt32(zipData, offset);
+        if (!centralDirectorySignature || *centralDirectorySignature != ZipCentralDirectorySignature) {
             qWarning() << "Invalid DOCX ZIP central directory entry:" << filePath;
             return QString();
         }
 
-        const quint16 flags = readUInt16(zipData, offset + 8);
-        const quint16 compressionMethod = readUInt16(zipData, offset + 10);
-        const quint32 compressedSize = readUInt32(zipData, offset + 20);
-        const quint32 uncompressedSize = readUInt32(zipData, offset + 24);
-        const quint16 fileNameLength = readUInt16(zipData, offset + 28);
-        const quint16 extraLength = readUInt16(zipData, offset + 30);
-        const quint16 commentLength = readUInt16(zipData, offset + 32);
-        const quint32 localHeaderOffset = readUInt32(zipData, offset + 42);
-
-        if (offset + 46 + fileNameLength + extraLength + commentLength > zipData.size()) {
+        const std::optional<quint16> flags = readUInt16(zipData, offset + 8);
+        const std::optional<quint16> compressionMethod = readUInt16(zipData, offset + 10);
+        const std::optional<quint32> compressedSize = readUInt32(zipData, offset + 20);
+        const std::optional<quint32> uncompressedSize = readUInt32(zipData, offset + 24);
+        const std::optional<quint16> fileNameLength = readUInt16(zipData, offset + 28);
+        const std::optional<quint16> extraLength = readUInt16(zipData, offset + 30);
+        const std::optional<quint16> commentLength = readUInt16(zipData, offset + 32);
+        const std::optional<quint32> localHeaderOffset = readUInt32(zipData, offset + 42);
+        if (!flags || !compressionMethod || !compressedSize || !uncompressedSize
+            || !fileNameLength || !extraLength || !commentLength || !localHeaderOffset
+            || !hasBytes(zipData, offset, 46 + *fileNameLength + *extraLength + *commentLength)) {
             qWarning() << "Invalid DOCX ZIP entry bounds:" << filePath;
             return QString();
         }
 
-        const QString fileName = QString::fromUtf8(zipData.constData() + offset + 46, fileNameLength);
-        offset += 46 + fileNameLength + extraLength + commentLength;
+        const QByteArray fileName = zipData.mid(offset + 46, *fileNameLength);
+        offset += 46 + *fileNameLength + *extraLength + *commentLength;
 
-        if (fileName != entryName) {
+        if (fileName != expectedEntryName) {
             continue;
         }
 
-        if ((flags & 0x1) != 0) {
+        if ((*flags & 0x1) != 0) {
             qWarning() << "Encrypted DOCX entries are not supported:" << filePath;
             return QString();
         }
 
-        if (localHeaderOffset + 30 > static_cast<quint32>(zipData.size())
-            || readUInt32(zipData, localHeaderOffset) != ZipLocalFileHeaderSignature) {
+        if (*uncompressedSize > MaxDocxEntrySize || *compressedSize > MaxDocxEntrySize) {
+            qWarning() << "DOCX entry is too large to parse safely:" << entryName;
+            return QString();
+        }
+
+        const qsizetype localOffset = static_cast<qsizetype>(*localHeaderOffset);
+        const std::optional<quint32> localSignature = readUInt32(zipData, localOffset);
+        if (!localSignature || *localSignature != ZipLocalFileHeaderSignature) {
             qWarning() << "Invalid DOCX ZIP local file header:" << filePath;
             return QString();
         }
 
-        const quint16 localFileNameLength = readUInt16(zipData, localHeaderOffset + 26);
-        const quint16 localExtraLength = readUInt16(zipData, localHeaderOffset + 28);
-        const qsizetype dataOffset = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
+        const std::optional<quint16> localFileNameLength = readUInt16(zipData, localOffset + 26);
+        const std::optional<quint16> localExtraLength = readUInt16(zipData, localOffset + 28);
+        if (!localFileNameLength || !localExtraLength
+            || !hasBytes(zipData, localOffset, 30 + *localFileNameLength + *localExtraLength)) {
+            qWarning() << "Invalid DOCX ZIP local file header bounds:" << filePath;
+            return QString();
+        }
 
-        if (dataOffset + compressedSize > zipData.size()) {
+        const qsizetype dataOffset = localOffset + 30 + *localFileNameLength + *localExtraLength;
+
+        if (!hasBytes(zipData, dataOffset, *compressedSize)) {
             qWarning() << "Invalid DOCX ZIP compressed data bounds:" << filePath;
             return QString();
         }
 
-        const QByteArray compressed = zipData.mid(dataOffset, compressedSize);
+        const QByteArray compressed = zipData.mid(dataOffset, *compressedSize);
         QByteArray uncompressed;
 
-        if (compressionMethod == ZipStored) {
+        if (*compressionMethod == ZipStored) {
             uncompressed = compressed;
-        } else if (compressionMethod == ZipDeflated) {
-            uncompressed = inflateRawDeflate(compressed, uncompressedSize);
+        } else if (*compressionMethod == ZipDeflated) {
+            uncompressed = inflateRawDeflate(compressed, *uncompressedSize);
         } else {
-            qWarning() << "Unsupported DOCX ZIP compression method:" << compressionMethod;
+            qWarning() << "Unsupported DOCX ZIP compression method:" << *compressionMethod;
             return QString();
         }
 
-        if (uncompressed.isEmpty() && uncompressedSize != 0) {
+        if (static_cast<quint32>(uncompressed.size()) != *uncompressedSize) {
             qWarning() << "Failed to decompress DOCX entry:" << entryName;
             return QString();
         }
@@ -249,34 +297,34 @@ DocumentStructure DocumentParser::parseDocxXml(const QString &xmlContent)
         if (xml.isStartElement()) {
             const QStringView name = xml.name();
 
-            if (name == QString("tc")) {
+            if (name == u"tc") {
                 inTableCell = true;
-            } else if (name == QString("p")) {
+            } else if (name == u"p") {
                 inParagraph = true;
                 currentElement.type = inTableCell ? DocumentElement::TableCell : DocumentElement::Paragraph;
                 currentElement.level = 0;
                 currentText.clear();
-            } else if (name == QString("t") || name == QString("instrText")) {
+            } else if (name == u"t" || name == u"instrText") {
                 currentText += xml.readElementText();
-            } else if (name == QString("tab")) {
+            } else if (name == u"tab") {
                 currentText += "\t";
-            } else if (name == QString("br") || name == QString("cr")) {
+            } else if (name == u"br" || name == u"cr") {
                 currentText += "\n";
-            } else if (name == QString("pStyle") && inParagraph) {
-                const QString val = attributeValue(xml.attributes(), QStringLiteral("val"));
+            } else if (name == u"pStyle" && inParagraph) {
+                const QString val = xml.attributes().value(u"val").toString();
                 if (val.startsWith("Heading")) {
                     currentElement.type = DocumentElement::Heading;
                     currentElement.level = val.mid(7).toInt();
                 }
-            } else if (name == QString("numPr") && inParagraph && currentElement.type != DocumentElement::Heading) {
+            } else if (name == u"numPr" && inParagraph && currentElement.type != DocumentElement::Heading) {
                 currentElement.type = DocumentElement::ListItem;
-            } else if (name == QString("ilvl") && currentElement.type == DocumentElement::ListItem) {
-                currentElement.level = attributeValue(xml.attributes(), QStringLiteral("val")).toInt();
+            } else if (name == u"ilvl" && currentElement.type == DocumentElement::ListItem) {
+                currentElement.level = xml.attributes().value(u"val").toInt();
             }
         } else if (xml.isEndElement()) {
             const QStringView name = xml.name();
 
-            if (name == QString("p")) {
+            if (name == u"p") {
                 currentElement.content = currentText;
                 if (!currentText.trimmed().isEmpty()) {
                     structure.elements.append(currentElement);
@@ -284,7 +332,7 @@ DocumentStructure DocumentParser::parseDocxXml(const QString &xmlContent)
                 currentElement = DocumentElement();
                 currentText.clear();
                 inParagraph = false;
-            } else if (name == QString("tc")) {
+            } else if (name == u"tc") {
                 inTableCell = false;
             }
         }

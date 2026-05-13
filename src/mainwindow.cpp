@@ -41,6 +41,27 @@ QStringList localDroppedFiles(const QMimeData *mimeData)
 
     return files;
 }
+
+bool hasExactlyTwoLocalDroppedFiles(const QMimeData *mimeData)
+{
+    if (!mimeData->hasUrls()) {
+        return false;
+    }
+
+    int localFileCount = 0;
+    for (const QUrl &url : mimeData->urls()) {
+        if (!url.isLocalFile() || !QFileInfo(url.toLocalFile()).isFile()) {
+            continue;
+        }
+
+        ++localFileCount;
+        if (localFileCount > 2) {
+            return false;
+        }
+    }
+
+    return localFileCount == 2;
+}
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -277,7 +298,7 @@ void MainWindow::updateRecentPairAction()
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (localDroppedFiles(event->mimeData()).size() == 2) {
+    if (hasExactlyTwoLocalDroppedFiles(event->mimeData())) {
         event->acceptProposedAction();
     }
 }

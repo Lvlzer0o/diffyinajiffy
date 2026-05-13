@@ -15,8 +15,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-$SUDO apt-get update
-$SUDO apt-get install -y --no-install-recommends \
+$SUDO apt-get update && $SUDO apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     ninja-build \
@@ -34,4 +33,4 @@ $SUDO apt-get install -y --no-install-recommends \
     libxcb-render-util0 \
     libxcb-xinerama0
 
-cmake --preset codex-cloud-linux
+cmake -S . -B build/codex-cloud -G Ninja

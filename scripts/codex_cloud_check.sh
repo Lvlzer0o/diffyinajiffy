@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-cmake --preset codex-cloud-linux
-cmake --build --preset codex-cloud-linux
+cmake -S . -B build/codex-cloud -G Ninja
+cmake --build build/codex-cloud
 
 app="./build/codex-cloud/diffyinajiffy"
 

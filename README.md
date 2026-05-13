@@ -81,7 +81,7 @@ Use this command when asking Codex to verify UI/build changes:
 bash ./scripts/codex_cloud_check.sh
 ```
 
-The check configures and builds the `codex-cloud-linux` CMake preset, then launches the app under `xvfb-run` long enough to prove the Qt GUI can start in a headless container.
+The check configures and builds `build/codex-cloud` with Ninja, then launches the app under `xvfb-run` long enough to prove the Qt GUI can start in a headless container.
 
 ## Usage
 

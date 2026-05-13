@@ -9,6 +9,7 @@ set(CMAKE_AUTOUIC ON)
 
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(ZLIB REQUIRED)
 
 # Find additional libraries for document handling (optional)
 find_package(PkgConfig)
@@ -43,6 +44,7 @@ target_link_libraries(${PROJECT_NAME}
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    ZLIB::ZLIB
 )
 
 if(POPPLER_FOUND)

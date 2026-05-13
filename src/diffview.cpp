@@ -86,6 +86,7 @@ void DiffView::setupUI()
     leftGutter = new QTextEdit();
     leftGutter->setObjectName("lineNumberGutter");
     leftGutter->setReadOnly(true);
+    leftGutter->setAcceptDrops(false);
     leftGutter->setLineWrapMode(QTextEdit::NoWrap);
     leftGutter->setFocusPolicy(Qt::NoFocus);
     leftGutter->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -96,6 +97,7 @@ void DiffView::setupUI()
     resizeLineNumberGutter(leftGutter, 2);
     leftPane = new QTextEdit();
     leftPane->setReadOnly(true);
+    leftPane->setAcceptDrops(false);
     leftPane->setLineWrapMode(QTextEdit::NoWrap);
     leftPane->setFont(diffFont);
     leftPane->document()->setDocumentMargin(5);
@@ -117,6 +119,7 @@ void DiffView::setupUI()
     rightGutter = new QTextEdit();
     rightGutter->setObjectName("lineNumberGutter");
     rightGutter->setReadOnly(true);
+    rightGutter->setAcceptDrops(false);
     rightGutter->setLineWrapMode(QTextEdit::NoWrap);
     rightGutter->setFocusPolicy(Qt::NoFocus);
     rightGutter->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -127,6 +130,7 @@ void DiffView::setupUI()
     resizeLineNumberGutter(rightGutter, 2);
     rightPane = new QTextEdit();
     rightPane->setReadOnly(true);
+    rightPane->setAcceptDrops(false);
     rightPane->setLineWrapMode(QTextEdit::NoWrap);
     rightPane->setFont(diffFont);
     rightPane->document()->setDocumentMargin(5);

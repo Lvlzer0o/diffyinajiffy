@@ -3,6 +3,45 @@
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
+#include <QSettings>
+#include <QFileInfo>
+
+namespace {
+const char *LastOriginalKey = "files/lastOriginal";
+const char *LastModifiedKey = "files/lastModified";
+const char *LastDirectoryKey = "files/lastDirectory";
+
+QString fileDialogFilter()
+{
+    return QObject::tr("All Supported Files (*.txt *.md *.docx *.pdf);;Text Files (*.txt);;Markdown Files (*.md);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)");
+}
+
+QStringList localDroppedFiles(const QMimeData *mimeData)
+{
+    QStringList files;
+
+    if (!mimeData->hasUrls()) {
+        return files;
+    }
+
+    for (const QUrl &url : mimeData->urls()) {
+        if (!url.isLocalFile()) {
+            continue;
+        }
+
+        const QString path = url.toLocalFile();
+        if (QFileInfo(path).isFile()) {
+            files.append(path);
+        }
+    }
+
+    return files;
+}
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -11,6 +50,8 @@ MainWindow::MainWindow(QWidget *parent)
     createActions();
     createMenus();
     createToolBar();
+    updateRecentPairAction();
+    setAcceptDrops(true);
     
     setWindowTitle("DiffyInAJiffy - Side-by-Side Diff Viewer");
     resize(1200, 800);
@@ -52,8 +93,12 @@ void MainWindow::createActions()
 {
     openFilesAction = new QAction(tr("&Open Files..."), this);
     openFilesAction->setShortcut(QKeySequence::Open);
-    openFilesAction->setStatusTip(tr("Open two files to compare"));
+    openFilesAction->setStatusTip(tr("Select an original file and then a modified file"));
     connect(openFilesAction, &QAction::triggered, this, &MainWindow::openFiles);
+
+    recentPairAction = new QAction(tr("Open &Recent Pair"), this);
+    recentPairAction->setStatusTip(tr("Reopen the last compared file pair"));
+    connect(recentPairAction, &QAction::triggered, this, &MainWindow::openRecentPair);
     
     openFoldersAction = new QAction(tr("Open &Folders..."), this);
     openFoldersAction->setShortcut(tr("Ctrl+Shift+O"));
@@ -104,6 +149,7 @@ void MainWindow::createMenus()
 {
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
     fileMenu->addAction(openFilesAction);
+    fileMenu->addAction(recentPairAction);
     fileMenu->addAction(openFoldersAction);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAction);
@@ -124,6 +170,7 @@ void MainWindow::createToolBar()
 {
     QToolBar *toolBar = addToolBar(tr("Main"));
     toolBar->addAction(openFilesAction);
+    toolBar->addAction(recentPairAction);
     toolBar->addAction(openFoldersAction);
     toolBar->addSeparator();
     toolBar->addAction(ignoreWhitespaceAction);
@@ -136,20 +183,47 @@ void MainWindow::createToolBar()
 
 void MainWindow::openFiles()
 {
-    QStringList files = QFileDialog::getOpenFileNames(
+    QSettings settings;
+    const QString startDirectory = settings.value(LastDirectoryKey).toString();
+
+    const QString originalFile = QFileDialog::getOpenFileName(
         this,
-        tr("Select Two Files to Compare"),
-        QString(),
-        tr("All Supported Files (*.txt *.md *.docx *.pdf);;Text Files (*.txt);;Markdown Files (*.md);;Word Documents (*.docx);;PDF Files (*.pdf);;All Files (*)")
+        tr("Select Original File"),
+        startDirectory,
+        fileDialogFilter()
     );
-    
-    if (files.size() == 2) {
-        diffView->loadFiles(files[0], files[1]);
-        statusBar()->showMessage(tr("Comparing: %1 and %2").arg(files[0]).arg(files[1]));
-    } else if (files.size() > 0) {
-        QMessageBox::warning(this, tr("File Selection"), 
-            tr("Please select exactly two files to compare."));
+
+    if (originalFile.isEmpty()) {
+        return;
     }
+
+    const QString modifiedFile = QFileDialog::getOpenFileName(
+        this,
+        tr("Select Modified File"),
+        QFileInfo(originalFile).absolutePath(),
+        fileDialogFilter()
+    );
+
+    if (modifiedFile.isEmpty()) {
+        return;
+    }
+
+    compareFiles(originalFile, modifiedFile);
+}
+
+void MainWindow::openRecentPair()
+{
+    QSettings settings;
+    const QString originalFile = settings.value(LastOriginalKey).toString();
+    const QString modifiedFile = settings.value(LastModifiedKey).toString();
+
+    if (!QFileInfo(originalFile).isFile() || !QFileInfo(modifiedFile).isFile()) {
+        QMessageBox::warning(this, tr("Recent Pair"), tr("The last compared file pair is no longer available."));
+        updateRecentPairAction();
+        return;
+    }
+
+    compareFiles(originalFile, modifiedFile);
 }
 
 void MainWindow::openFolders()
@@ -166,8 +240,58 @@ void MainWindow::openFolders()
     if (folder2.isEmpty())
         return;
     
+    QSettings settings;
+    settings.setValue(LastDirectoryKey, QFileInfo(folder1).absolutePath());
+
     folderView->loadFolders(folder1, folder2);
     statusBar()->showMessage(tr("Comparing folders: %1 and %2").arg(folder1).arg(folder2));
+}
+
+void MainWindow::compareFiles(const QString &file1, const QString &file2)
+{
+    diffView->loadFiles(file1, file2);
+
+    QSettings settings;
+    settings.setValue(LastOriginalKey, file1);
+    settings.setValue(LastModifiedKey, file2);
+    settings.setValue(LastDirectoryKey, QFileInfo(file1).absolutePath());
+
+    updateRecentPairAction();
+    statusBar()->showMessage(tr("Comparing: %1 and %2").arg(file1).arg(file2));
+}
+
+void MainWindow::updateRecentPairAction()
+{
+    QSettings settings;
+    const QString originalFile = settings.value(LastOriginalKey).toString();
+    const QString modifiedFile = settings.value(LastModifiedKey).toString();
+    const bool filesExist = QFileInfo(originalFile).isFile() && QFileInfo(modifiedFile).isFile();
+
+    recentPairAction->setEnabled(filesExist);
+    if (filesExist) {
+        recentPairAction->setStatusTip(tr("Reopen: %1 and %2").arg(originalFile, modifiedFile));
+    } else {
+        recentPairAction->setStatusTip(tr("Reopen the last compared file pair"));
+    }
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (localDroppedFiles(event->mimeData()).size() == 2) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    const QStringList files = localDroppedFiles(event->mimeData());
+    if (files.size() != 2) {
+        QMessageBox::warning(this, tr("Drop Files"), tr("Drop exactly two files to compare them."));
+        return;
+    }
+
+    compareFiles(files[0], files[1]);
+    event->acceptProposedAction();
 }
 
 void MainWindow::toggleIgnoreWhitespace(bool enabled)

@@ -24,6 +24,7 @@ set(SOURCES
     src/diffengine.cpp
     src/documentparser.cpp
     src/folderview.cpp
+    resources/app.qrc
 )
 
 set(HEADERS

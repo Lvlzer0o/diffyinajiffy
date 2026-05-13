@@ -29,6 +29,7 @@ qrc_*.cpp
 *.exe
 
 # CMake
+CMakeUserPresets.json
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake

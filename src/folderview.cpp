@@ -20,7 +20,7 @@ void FolderView::setupUI()
     QVBoxLayout *layout = new QVBoxLayout(this);
     
     QLabel *label = new QLabel(tr("File Tree"));
-    label->setStyleSheet("font-weight: bold; padding: 5px; background-color: #f0f0f0;");
+    label->setStyleSheet("font-weight: bold; padding: 6px 8px; background-color: #252e3a; color: #f4f7fa; border: 1px solid #334052; border-bottom: 0;");
     
     treeWidget = new QTreeWidget();
     treeWidget->setHeaderLabels(QStringList() << tr("File") << tr("Status"));
@@ -134,13 +134,13 @@ void FolderView::addFileItem(const QString &name, const QString &path1, const QS
     
     // Color code based on status
     if (status == "Modified") {
-        item->setForeground(1, QColor(255, 140, 0)); // Orange
+        item->setForeground(1, QColor(255, 205, 112));
     } else if (status == "Added") {
-        item->setForeground(1, QColor(0, 128, 0)); // Green
+        item->setForeground(1, QColor(126, 231, 166));
     } else if (status == "Deleted") {
-        item->setForeground(1, QColor(255, 0, 0)); // Red
+        item->setForeground(1, QColor(255, 146, 160));
     } else if (status == "Identical") {
-        item->setForeground(1, QColor(128, 128, 128)); // Gray
+        item->setForeground(1, QColor(151, 163, 176));
     }
 }
 

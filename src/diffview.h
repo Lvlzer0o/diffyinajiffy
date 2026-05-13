@@ -32,6 +32,8 @@ private:
     void displayDocxDiff(const QString &file1, const QString &file2);
     void highlightDifferences(const QVector<DiffLinePair> &lines);
     
+    QTextEdit *leftGutter;
+    QTextEdit *rightGutter;
     QTextEdit *leftPane;
     QTextEdit *rightPane;
     QSplitter *splitter;

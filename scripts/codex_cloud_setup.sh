@@ -20,6 +20,7 @@ $SUDO apt-get update && $SUDO apt-get install -y --no-install-recommends \
     cmake \
     ninja-build \
     pkg-config \
+    zlib1g-dev \
     qt6-base-dev \
     qt6-base-dev-tools \
     xvfb \

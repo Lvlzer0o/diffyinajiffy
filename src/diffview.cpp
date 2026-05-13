@@ -9,6 +9,7 @@
 #include <QScrollBar>
 #include <QTextFormat>
 #include <QFont>
+#include <QFontMetrics>
 
 namespace {
 int lineToPosition(const QTextDocument *doc, int lineNumber)
@@ -36,6 +37,14 @@ void appendRowSelection(QTextEdit *editor,
     selection.format = format;
     selection.format.setProperty(QTextFormat::FullWidthSelection, true);
     selections.append(selection);
+}
+
+void resizeLineNumberGutter(QTextEdit *gutter, int digitCount)
+{
+    const int visibleDigits = digitCount < 2 ? 2 : digitCount;
+    const QFontMetrics metrics(gutter->font());
+    const int documentMargins = static_cast<int>(gutter->document()->documentMargin()) * 2;
+    gutter->setFixedWidth(metrics.horizontalAdvance(QString(visibleDigits, QChar('9'))) + documentMargins + 14);
 }
 }
 
@@ -78,13 +87,13 @@ void DiffView::setupUI()
     leftGutter->setObjectName("lineNumberGutter");
     leftGutter->setReadOnly(true);
     leftGutter->setLineWrapMode(QTextEdit::NoWrap);
-    leftGutter->setFixedWidth(48);
     leftGutter->setFocusPolicy(Qt::NoFocus);
     leftGutter->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     leftGutter->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     leftGutter->setTextInteractionFlags(Qt::NoTextInteraction);
     leftGutter->setFont(diffFont);
     leftGutter->document()->setDocumentMargin(5);
+    resizeLineNumberGutter(leftGutter, 2);
     leftPane = new QTextEdit();
     leftPane->setReadOnly(true);
     leftPane->setLineWrapMode(QTextEdit::NoWrap);
@@ -109,13 +118,13 @@ void DiffView::setupUI()
     rightGutter->setObjectName("lineNumberGutter");
     rightGutter->setReadOnly(true);
     rightGutter->setLineWrapMode(QTextEdit::NoWrap);
-    rightGutter->setFixedWidth(48);
     rightGutter->setFocusPolicy(Qt::NoFocus);
     rightGutter->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     rightGutter->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     rightGutter->setTextInteractionFlags(Qt::NoTextInteraction);
     rightGutter->setFont(diffFont);
     rightGutter->document()->setDocumentMargin(5);
+    resizeLineNumberGutter(rightGutter, 2);
     rightPane = new QTextEdit();
     rightPane->setReadOnly(true);
     rightPane->setLineWrapMode(QTextEdit::NoWrap);
@@ -250,6 +259,8 @@ void DiffView::displayTextDiff(const QString &text1, const QString &text2)
     int rightLineNumber = 1;
     const int leftLineNumberWidth = QString::number(displayText1.count('\n') + 1).length();
     const int rightLineNumberWidth = QString::number(displayText2.count('\n') + 1).length();
+    resizeLineNumberGutter(leftGutter, leftLineNumberWidth);
+    resizeLineNumberGutter(rightGutter, rightLineNumberWidth);
 
     changeLineIndices.clear();
     for (int i = 0; i < alignedLines.size(); ++i) {

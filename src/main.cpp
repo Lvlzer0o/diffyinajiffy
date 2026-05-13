@@ -1,122 +1,16 @@
 #include "mainwindow.h"
 #include <QApplication>
+#include <QFile>
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName("DiffyInAJiffy");
     app.setApplicationVersion("1.0.0");
-    app.setStyleSheet(R"(
-        QWidget {
-            background-color: #161b22;
-            color: #e8edf2;
-            selection-background-color: #2f6f92;
-            selection-color: #ffffff;
-        }
-
-        QMainWindow,
-        QMenuBar,
-        QToolBar,
-        QStatusBar {
-            background-color: #12171f;
-            color: #e8edf2;
-        }
-
-        QMenuBar {
-            border-bottom: 1px solid #27313d;
-        }
-
-        QMenuBar::item {
-            background: transparent;
-            padding: 5px 10px;
-        }
-
-        QMenuBar::item:selected,
-        QMenu {
-            background-color: #202936;
-        }
-
-        QMenu {
-            border: 1px solid #334052;
-        }
-
-        QMenu::item {
-            padding: 5px 24px;
-        }
-
-        QMenu::item:selected {
-            background-color: #2f6f92;
-        }
-
-        QToolBar {
-            border: 0;
-            border-bottom: 1px solid #27313d;
-            padding: 4px;
-            spacing: 4px;
-        }
-
-        QToolButton {
-            background-color: #1e2631;
-            border: 1px solid #364353;
-            border-radius: 3px;
-            color: #f2f5f8;
-            padding: 4px 8px;
-        }
-
-        QToolButton:hover {
-            background-color: #283343;
-            border-color: #4e637a;
-        }
-
-        QToolButton:checked {
-            background-color: #214d64;
-            border-color: #4b9ac0;
-        }
-
-        QSplitter::handle {
-            background-color: #27313d;
-        }
-
-        QTextEdit,
-        QTreeWidget {
-            background-color: #1b222c;
-            border: 1px solid #334052;
-            border-radius: 4px;
-            color: #f4f7fa;
-        }
-
-        QTextEdit#lineNumberGutter {
-            background-color: #141b24;
-            border-right: 0;
-            border-top-right-radius: 0;
-            border-bottom-right-radius: 0;
-            color: #8fa0b2;
-        }
-
-        QHeaderView::section {
-            background-color: #252e3a;
-            border: 0;
-            border-right: 1px solid #334052;
-            border-bottom: 1px solid #334052;
-            color: #d9e2ec;
-            font-weight: bold;
-            padding: 5px 8px;
-        }
-
-        QTreeWidget::item {
-            padding: 3px 4px;
-        }
-
-        QTreeWidget::item:selected {
-            background-color: #2f6f92;
-            color: #ffffff;
-        }
-
-        QStatusBar {
-            border-top: 1px solid #27313d;
-            color: #c4ced9;
-        }
-    )");
+    QFile styleFile(":/styles/app.qss");
+    if (styleFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        app.setStyleSheet(QString::fromUtf8(styleFile.readAll()));
+    }
     
     MainWindow window;
     window.show();
